@@ -1,0 +1,1 @@
+{"name":"wmkang-marketplace","owner":{"name":"wmkang1981"},"plugins":[{"name":"hello-plugin","source":"./plugins/hello-plugin","description":"Example starter plugin","version":"1.0.0"}]}

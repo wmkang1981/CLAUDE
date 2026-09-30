@@ -1,11 +1,12 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { SiteView } from '../shared/SiteView';
-import type { Product, Settings } from '../shared/types';
+import type { Category, Product, Settings } from '../shared/types';
 import { ApiError, adminApi } from './api';
 import { Editor, type Draft } from './Editor';
 import { ProductList } from './ProductList';
 import { SettingsPanel } from './SettingsPanel';
+import { CategoryPanel } from './CategoryPanel';
 import { prepareImage } from './imageUtils';
 import '../shared/site.css';
 import './admin.css';
@@ -76,7 +77,10 @@ function Dashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [products, setProducts] = useState<Product[] | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [savedSettings, setSavedSettings] = useState<Settings | null>(null);
-  const [tab, setTab] = useState<'products' | 'settings'>('products');
+  const [categories, setCategories] = useState<Category[] | null>(null);
+  const [savedCategories, setSavedCategories] = useState<Category[] | null>(null);
+  const [savingCategories, setSavingCategories] = useState(false);
+  const [tab, setTab] = useState<'products' | 'categories' | 'settings'>('products');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [draftBase, setDraftBase] = useState<Draft | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -103,6 +107,8 @@ function Dashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
         setProducts(p.products);
         setSettings(s.settings);
         setSavedSettings(s.settings);
+        setCategories(s.categories ?? []);
+        setSavedCategories(s.categories ?? []);
       })
       .catch(handleError);
   }, [handleError]);
@@ -230,6 +236,33 @@ function Dashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
     }
   };
 
+  const saveCategories = async () => {
+    if (!categories) return;
+    if (categories.some((c) => !c.name.trim())) return notify('이름이 빈 카테고리가 있어요.', 'err');
+    setSavingCategories(true);
+    try {
+      const { categories: saved } = await adminApi.saveCategories(categories);
+      setCategories(saved);
+      setSavedCategories(saved);
+      // 지운 카테고리에 있던 상품은 서버에서 "카테고리 없음"이 돼요 → 목록 새로 받기
+      setProducts((await adminApi.products()).products);
+      notify('카테고리를 저장했어요.');
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setSavingCategories(false);
+    }
+  };
+
+  const switchTab = (next: 'products' | 'categories' | 'settings') => {
+    if (next !== 'products' && draft) {
+      if (!confirmLeave()) return;
+      if (draft.localImage) URL.revokeObjectURL(draft.localImage);
+      setDraft(null);
+    }
+    setTab(next);
+  };
+
   // 미리보기: 편집 중인 내용을 저장 전에도 바로 보여줘요
   const preview = useMemo(() => {
     if (!products) return [];
@@ -238,13 +271,17 @@ function Dashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
     return products.map((p) => (p.id === draft.id ? draft : p));
   }, [products, draft]);
 
-  const categories = useMemo(
-    () => [...new Set((products ?? []).map((p) => p.category).filter(Boolean))],
-    [products],
-  );
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of products ?? []) if (p.category) m.set(p.category, (m.get(p.category) ?? 0) + 1);
+    return m;
+  }, [products]);
 
-  if (!products || !settings || !savedSettings) return <p className="loading">불러오는 중…</p>;
+  if (!products || !settings || !savedSettings || !categories || !savedCategories) return <p className="loading">불러오는 중…</p>;
   const settingsDirty = JSON.stringify(settings) !== JSON.stringify(savedSettings);
+  const categoriesDirty = JSON.stringify(categories) !== JSON.stringify(savedCategories);
+  // 미리보기에는 이름을 적은 카테고리만 보여줘요
+  const previewCategories = categories.filter((c) => c.name.trim());
 
   return (
     <div className="adm">
@@ -273,7 +310,13 @@ function Dashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
           <div className="phone">
             <div className="phone-notch" />
             <div className="phone-screen">
-              <SiteView settings={settings} products={preview} onSelect={editProduct} selectedId={draft?.id ?? null} />
+              <SiteView
+                settings={settings}
+                categories={previewCategories}
+                products={preview}
+                onSelect={editProduct}
+                selectedId={draft?.id ?? null}
+              />
             </div>
           </div>
           <p className="adm-hint">👆 미리보기 속 사진을 누르면 그 상품을 고칠 수 있어요 (여기선 쇼핑몰로 안 넘어가요)</p>
@@ -281,35 +324,35 @@ function Dashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
 
         <section className="adm-right">
           <nav className="tabs">
-            <button
-              type="button"
-              className={tab === 'products' ? 'on' : ''}
-              onClick={() => setTab('products')}
-            >
+            <button type="button" className={tab === 'products' ? 'on' : ''} onClick={() => switchTab('products')}>
               📦 상품
             </button>
-            <button
-              type="button"
-              className={tab === 'settings' ? 'on' : ''}
-              onClick={() => {
-                if (draft && !confirmLeave()) return;
-                if (draft?.localImage) URL.revokeObjectURL(draft.localImage);
-                setDraft(null);
-                setTab('settings');
-              }}
-            >
+            <button type="button" className={tab === 'categories' ? 'on' : ''} onClick={() => switchTab('categories')}>
+              🏷️ 카테고리{categoriesDirty ? ' •' : ''}
+            </button>
+            <button type="button" className={tab === 'settings' ? 'on' : ''} onClick={() => switchTab('settings')}>
               ⚙️ 사이트 설정
             </button>
           </nav>
 
-          {tab === 'settings' ? (
+          {tab === 'categories' ? (
+            <CategoryPanel
+              categories={categories}
+              counts={counts}
+              onChange={setCategories}
+              onSave={saveCategories}
+              saving={savingCategories}
+              dirty={categoriesDirty}
+            />
+          ) : tab === 'settings' ? (
             <SettingsPanel settings={settings} onChange={setSettings} onSave={saveSettings} saving={savingSettings} dirty={settingsDirty} />
           ) : draft ? (
             <Editor
               key={draft.id}
               draft={draft}
               isNew={draft.id === NEW_ID}
-              categories={categories}
+              categories={savedCategories}
+              onManageCategories={() => switchTab('categories')}
               onChange={changeDraft}
               onSave={saveDraft}
               onCancel={closeDraft}
@@ -317,7 +360,7 @@ function Dashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
               notify={notify}
             />
           ) : (
-            <ProductList products={products} onEdit={editProduct} onNew={startNew} onReorder={reorder} onToggleHidden={toggleHidden} />
+            <ProductList products={products} categories={savedCategories} onEdit={editProduct} onNew={startNew} onReorder={reorder} onToggleHidden={toggleHidden} />
           )}
         </section>
       </div>

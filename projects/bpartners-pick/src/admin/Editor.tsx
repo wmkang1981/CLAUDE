@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Cropper, { type Area, type MediaSize } from 'react-easy-crop';
-import { TILE_ASPECT, detectStore, imageSrc, type Product } from '../shared/types';
+import { TILE_ASPECT, detectStore, imageSrc, noteTextColor, type Category, type Product } from '../shared/types';
 import { adminApi } from './api';
 import { imageUrlFromDrop, prepareImage } from './imageUtils';
 
@@ -9,7 +9,8 @@ export type Draft = Product & { imageBlob?: Blob };
 type Props = {
   draft: Draft;
   isNew: boolean;
-  categories: string[];
+  categories: Category[];
+  onManageCategories: () => void;
   /** baseline=true: 사진을 처음 열 때 자동으로 계산된 위치 (사용자가 고친 게 아님) */
   onChange: (d: Draft, baseline?: boolean) => void;
   onSave: () => Promise<void>;
@@ -25,7 +26,7 @@ function containZoom(media: MediaSize | null): number {
   return Math.min(r / TILE_ASPECT, TILE_ASPECT / r);
 }
 
-export function Editor({ draft, isNew, categories, onChange, onSave, onCancel, onDelete, notify }: Props) {
+export function Editor({ draft, isNew, categories, onManageCategories, onChange, onSave, onCancel, onDelete, notify }: Props) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [media, setMedia] = useState<MediaSize | null>(null);
@@ -287,20 +288,37 @@ export function Editor({ draft, isNew, categories, onChange, onSave, onCancel, o
             onChange={(e) => set({ num: e.target.value === '' ? null : Number(e.target.value) })}
           />
         </label>
-        <label className="field">
-          <span className="field-label">카테고리 (선택)</span>
-          <input
-            list="cat-list"
-            placeholder="예: 주방, 뷰티"
-            value={draft.category}
-            onChange={(e) => set({ category: e.target.value })}
-          />
-          <datalist id="cat-list">
-            {categories.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-        </label>
+        <div className="field">
+          <span className="field-label">카테고리 (왼쪽 포스트잇)</span>
+          {categories.length === 0 ? (
+            <button type="button" className="btn" onClick={onManageCategories}>
+              🏷️ 카테고리 먼저 만들기
+            </button>
+          ) : (
+            <div className="cat-pick" role="radiogroup" aria-label="카테고리">
+              <button
+                type="button"
+                className={`cat-chip${!draft.category ? ' on' : ''}`}
+                onClick={() => set({ category: '' })}
+                aria-pressed={!draft.category}
+              >
+                없음
+              </button>
+              {categories.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`cat-chip${draft.category === c.id ? ' on' : ''}`}
+                  style={{ background: c.color, color: noteTextColor(c.color) }}
+                  onClick={() => set({ category: c.id })}
+                  aria-pressed={draft.category === c.id}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       <label className="field">
         <span className="field-label">상품 이름</span>

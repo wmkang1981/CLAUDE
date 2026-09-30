@@ -11,17 +11,18 @@ import {
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CroppedImage } from '../shared/CroppedImage';
-import { STORE_LABEL, imageSrc, type Product } from '../shared/types';
+import { STORE_LABEL, imageSrc, noteTextColor, type Category, type Product } from '../shared/types';
 
 type Props = {
   products: Product[];
+  categories: Category[];
   onEdit: (p: Product) => void;
   onNew: (image?: File) => void;
   onReorder: (next: Product[]) => void;
   onToggleHidden: (p: Product) => void;
 };
 
-function Row({ p, onEdit, onToggleHidden }: { p: Product; onEdit: () => void; onToggleHidden: () => void }) {
+function Row({ p, cat, onEdit, onToggleHidden }: { p: Product; cat?: Category; onEdit: () => void; onToggleHidden: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: p.id });
   const src = imageSrc(p);
   return (
@@ -42,7 +43,11 @@ function Row({ p, onEdit, onToggleHidden }: { p: Product; onEdit: () => void; on
           </span>
           <span className="pl-meta">
             <span className={`pl-store store-${p.store}`}>{STORE_LABEL[p.store]}</span>
-            {p.category && <span>{p.category}</span>}
+            {cat && (
+              <span className="pl-cat" style={{ background: cat.color, color: noteTextColor(cat.color) }}>
+                {cat.name}
+              </span>
+            )}
             {p.soldout && <span className="pl-flag">품절</span>}
             {!p.link && <span className="pl-flag">링크 없음</span>}
             <span>👆 클릭 {p.clicks ?? 0}</span>
@@ -56,7 +61,7 @@ function Row({ p, onEdit, onToggleHidden }: { p: Product; onEdit: () => void; on
   );
 }
 
-export function ProductList({ products, onEdit, onNew, onReorder, onToggleHidden }: Props) {
+export function ProductList({ products, categories, onEdit, onNew, onReorder, onToggleHidden }: Props) {
   const [over, setOver] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -102,7 +107,7 @@ export function ProductList({ products, onEdit, onNew, onReorder, onToggleHidden
         <SortableContext items={products.map((p) => p.id)} strategy={verticalListSortingStrategy}>
           <ul className="pl-list">
             {products.map((p) => (
-              <Row key={p.id} p={p} onEdit={() => onEdit(p)} onToggleHidden={() => onToggleHidden(p)} />
+              <Row key={p.id} p={p} cat={categories.find((c) => c.id === p.category)} onEdit={() => onEdit(p)} onToggleHidden={() => onToggleHidden(p)} />
             ))}
           </ul>
         </SortableContext>

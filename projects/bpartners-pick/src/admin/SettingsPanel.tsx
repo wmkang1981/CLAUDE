@@ -27,16 +27,6 @@ export function SettingsPanel({ settings, onChange, onSave, saving, dirty }: Pro
           <span className="field-help warn">⚠️ 비워두면 쿠팡 파트너스 규정·공정위 지침 위반이 될 수 있어요.</span>
         )}
       </label>
-      <div className="field">
-        <span className="field-label">한 줄에 보일 사진 수</span>
-        <div className="row">
-          {(['2', '3'] as const).map((c) => (
-            <button key={c} type="button" className={`btn${settings.columns === c ? ' primary' : ''}`} onClick={() => set({ columns: c })}>
-              {c}칸
-            </button>
-          ))}
-        </div>
-      </div>
       <label className="row checks">
         <input type="checkbox" checked={settings.showTitle !== '0'} onChange={(e) => set({ showTitle: e.target.checked ? '1' : '0' })} />
         사진 아래에 상품 이름 보이기

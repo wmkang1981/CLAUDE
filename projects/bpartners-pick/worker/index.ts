@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type Env, type ProductRow, detectStore, ensureSchema, readSettings, toProduct } from './db';
+import { DEFAULT_SETTINGS, type Env, type ProductRow, detectStore, ensureSchema, readCategories, readSettings, toProduct } from './db';
 import { checkPassword, clearSessionCookie, isLoggedIn, makeSessionCookie } from './auth';
 import { fetchMeta, isHttpUrl } from './meta';
 
@@ -55,7 +55,7 @@ function cleanProduct(p: ProductInput) {
   return {
     num,
     title: (p.title ?? '').trim().slice(0, 200),
-    category: (p.category ?? '').trim().slice(0, 30),
+    category: (p.category ?? '').trim().slice(0, 64),
     link,
     store: detectStore(link),
     image_id: p.image_id ?? null,
@@ -163,6 +163,30 @@ async function handleAdmin(req: Request, env: Env, path: string): Promise<Respon
     return json({ settings: await readSettings(env.DB) });
   }
 
+  // 카테고리 목록 통째로 저장 (보이는 순서 그대로)
+  if (path === '/api/admin/categories' && method === 'PUT') {
+    const { categories } = await body<{ categories?: { id?: string; name?: string; color?: string }[] }>(req);
+    if (!Array.isArray(categories) || categories.length > 50) return fail('카테고리 정보가 올바르지 않아요.');
+    const clean = categories.map((c) => {
+      const name = String(c.name ?? '').trim().slice(0, 12);
+      if (!name) throw new HttpError(400, '카테고리 이름을 적어주세요.');
+      const color = /^#[0-9a-f]{6}$/i.test(c.color ?? '') ? c.color!.toLowerCase() : '#ffe66d';
+      const id = typeof c.id === 'string' && /^[\w-]{1,64}$/.test(c.id) ? c.id : crypto.randomUUID();
+      return { id, name, color };
+    });
+    const ids = JSON.stringify(clean.map((c) => c.id));
+    const upsert = env.DB.prepare(
+      'INSERT INTO categories (id, name, color, sort) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, color = excluded.color, sort = excluded.sort',
+    );
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM categories WHERE id NOT IN (SELECT value FROM json_each(?))').bind(ids),
+      // 지운 카테고리에 있던 상품은 "전체"에서만 보이게 돼요
+      env.DB.prepare("UPDATE products SET category = '' WHERE category <> '' AND category NOT IN (SELECT value FROM json_each(?))").bind(ids),
+      ...clean.map((c, i) => upsert.bind(c.id, c.name, c.color, i)),
+    ]);
+    return json({ categories: await readCategories(env.DB) });
+  }
+
   // 사진 올리기 (브라우저에서 미리 줄인 사진을 받아요)
   if (path === '/api/admin/images' && method === 'POST') {
     const type = req.headers.get('Content-Type') ?? '';
@@ -206,11 +230,12 @@ async function route(req: Request, env: Env, ctx: ExecutionContext, url: URL): P
 
   // 손님 화면용: 사이트 설정 + 보이는 상품
   if (path === '/api/site' && req.method === 'GET') {
-    const [settings, { results }] = await Promise.all([
+    const [settings, categories, { results }] = await Promise.all([
       readSettings(env.DB),
+      readCategories(env.DB),
       env.DB.prepare('SELECT * FROM products WHERE hidden = 0 ORDER BY sort ASC, created_at DESC').all<ProductRow>(),
     ]);
-    return json({ settings, products: results.map((r) => toProduct(r, false)) });
+    return json({ settings, categories, products: results.map((r) => toProduct(r, false)) });
   }
 
   // 사진 클릭 수 세기

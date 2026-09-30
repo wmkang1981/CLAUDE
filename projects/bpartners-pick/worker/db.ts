@@ -40,6 +40,13 @@ export function ensureSchema(db: D1Database): Promise<void> {
           updated_at INTEGER NOT NULL
         )`),
         db.prepare(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`),
+        // 왼쪽 포스트잇 카테고리 (상품의 category 칸에는 이 id가 들어가요)
+        db.prepare(`CREATE TABLE IF NOT EXISTS categories (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          color TEXT NOT NULL DEFAULT '#ffe66d',
+          sort INTEGER NOT NULL DEFAULT 0
+        )`),
       ])
       .then(() => undefined)
       .catch((e) => {
@@ -55,6 +62,13 @@ export async function readSettings(db: D1Database): Promise<SettingsRow> {
   const s = { ...DEFAULT_SETTINGS };
   for (const r of results) if (r.key in s) (s as Record<string, string>)[r.key] = r.value;
   return s;
+}
+
+export type Category = { id: string; name: string; color: string };
+
+export async function readCategories(db: D1Database): Promise<Category[]> {
+  const { results } = await db.prepare('SELECT id, name, color FROM categories ORDER BY sort ASC').all<Category>();
+  return results;
 }
 
 export type ProductRow = {

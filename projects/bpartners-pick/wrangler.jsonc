@@ -1,0 +1,18 @@
+{
+  // Cloudflare Worker 설정 (홈페이지 + 관리자 API)
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bpartners-pick",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+  // 상품 정보 저장소 (처음 배포할 때 자동으로 만들어져요)
+  "d1_databases": [{ "binding": "DB", "database_name": "bpartners-pick-db" }],
+  // 상품 사진 저장소 (처음 배포할 때 자동으로 만들어져요)
+  "kv_namespaces": [{ "binding": "IMAGES" }],
+  "observability": { "enabled": true }
+}

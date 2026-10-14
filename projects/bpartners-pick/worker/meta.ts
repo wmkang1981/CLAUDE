@@ -50,5 +50,6 @@ export async function fetchMeta(link: string) {
   const title =
     metaContent(html, ['og:title', 'twitter:title']) ??
     decodeEntities(html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? '');
-  return { ok: true as const, status: res.status, store, finalUrl, image, title };
+  const clean = title.replace(/\s*\|\s*(쿠팡|coupang)!?\s*$/i, '').replace(/[\s\-–:|]+$/, '').trim();
+  return { ok: true as const, status: res.status, store, finalUrl, image, title: clean };
 }

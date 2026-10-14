@@ -8,6 +8,7 @@ import { ProductList } from './ProductList';
 import { SettingsPanel } from './SettingsPanel';
 import { CategoryPanel } from './CategoryPanel';
 import { prepareImage } from './imageUtils';
+import { parseImport, type Imported } from './bookmarklet';
 import '../shared/site.css';
 import './admin.css';
 
@@ -145,6 +146,35 @@ function Dashboard({ onLoggedOut }: { onLoggedOut: () => void }) {
     }
     openDraft(d);
   };
+
+  // 목록 화면에서 📌 담기 내용을 Ctrl+V → 새 상품을 바로 만들어요
+  const importNew = async (imp: Imported) => {
+    if (!products) return;
+    const d = { ...emptyDraft(products), title: imp.title };
+    if (imp.image) {
+      try {
+        const blob = await prepareImage(await adminApi.proxyImage(imp.image));
+        openDraft({ ...d, imageBlob: blob, localImage: URL.createObjectURL(blob) });
+        notify('📌 새 상품을 만들었어요. 구매 링크(파트너스 링크)를 넣고 저장하세요.');
+        return;
+      } catch (e) {
+        notify(`사진은 못 가져왔어요 (${(e as Error).message}). 쇼핑몰 사진을 "이미지 복사" 후 Ctrl+V 해주세요.`, 'err');
+      }
+    }
+    openDraft(d);
+  };
+
+  useEffect(() => {
+    if (draft || tab !== 'products') return;
+    const onPaste = (e: ClipboardEvent) => {
+      const imp = parseImport(e.clipboardData?.getData('text') ?? '');
+      if (!imp) return;
+      e.preventDefault();
+      void importNew(imp);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  });
 
   const editProduct = (p: Product) => {
     if (draft?.id === p.id || !confirmLeave()) return;

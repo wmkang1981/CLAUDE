@@ -3,6 +3,7 @@ import Cropper, { type Area, type MediaSize } from 'react-easy-crop';
 import { TILE_ASPECT, detectStore, imageSrc, noteTextColor, type Category, type Product } from '../shared/types';
 import { adminApi } from './api';
 import { imageUrlFromDrop, prepareImage } from './imageUtils';
+import { BOOKMARKLET, cleanTitle, parseImport, type Imported } from './bookmarklet';
 
 export type Draft = Product & { imageBlob?: Blob };
 
@@ -33,6 +34,7 @@ export function Editor({ draft, isNew, categories, onManageCategories, onChange,
   const [busy, setBusy] = useState<'' | 'save' | 'fetch' | 'image' | 'delete'>('');
   const [dragOver, setDragOver] = useState(false);
   const [fetchedImage, setFetchedImage] = useState<string | null>(null);
+  const [showHowto, setShowHowto] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -72,9 +74,25 @@ export function Editor({ draft, isNew, categories, onManageCategories, onChange,
     [applyImage, notify],
   );
 
-  // Ctrl+V 로 사진 붙여넣기
+  // 📌 담기 버튼으로 가져온 이름·사진 넣기
+  const applyImport = useCallback(
+    async (imp: Imported) => {
+      if (imp.title) onChange({ ...draftRef.current, title: imp.title });
+      if (imp.image) await applyImageUrl(imp.image);
+      notify(imp.image ? '📌 쿠팡 페이지에서 이름·사진을 가져왔어요.' : '📌 이름을 가져왔어요. 사진은 직접 넣어주세요.');
+    },
+    [onChange, applyImageUrl, notify],
+  );
+
+  // Ctrl+V 로 사진 붙여넣기 (또는 📌 담기 버튼으로 복사한 상품 정보)
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
+      const imp = parseImport(e.clipboardData?.getData('text') ?? '');
+      if (imp) {
+        e.preventDefault();
+        void applyImport(imp);
+        return;
+      }
       const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
       if (file) {
         e.preventDefault();
@@ -83,7 +101,7 @@ export function Editor({ draft, isNew, categories, onManageCategories, onChange,
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
-  }, [applyImage]);
+  }, [applyImage, applyImport]);
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -102,11 +120,15 @@ export function Editor({ draft, isNew, categories, onManageCategories, onChange,
     setFetchedImage(null);
     try {
       const meta = await adminApi.fetchMeta(link);
-      if (!meta.ok) {
-        notify(`쇼핑몰이 자동 가져오기를 막았어요 (${meta.status || '연결 실패'}). 사진은 직접 올려주세요.`, 'err');
+      if (!meta.ok || (!meta.image && !meta.title)) {
+        setShowHowto(true);
+        notify(
+          `쇼핑몰이 서버 접속을 막았어요${meta.status ? ` (${meta.status})` : ''}. 아래 "📌 담기 버튼" 방법을 써주세요.`,
+          'err',
+        );
         return;
       }
-      if (meta.title && !draftRef.current.title) set({ title: meta.title.slice(0, 200) });
+      if (meta.title && !draftRef.current.title) set({ title: cleanTitle(meta.title) });
       if (meta.image) {
         if (src) setFetchedImage(meta.image);
         else await applyImageUrl(meta.image);
@@ -179,6 +201,49 @@ export function Editor({ draft, isNew, categories, onManageCategories, onChange,
           <span className="field-help warn">⚠️ 일반 쿠팡 주소 같아요. 파트너스에서 만든 링크(link.coupang.com)를 넣어야 수수료가 들어와요.</span>
         )}
       </label>
+
+      <details className="howto" open={showHowto} onToggle={(e) => setShowHowto((e.target as HTMLDetailsElement).open)}>
+        <summary>🤔 자동으로 안 가져와지나요? → 📌 담기 버튼 쓰는 법</summary>
+        <p className="howto-why">쿠팡·네이버는 서버에서 들어오는 접속을 막을 때가 있어요. 그럴 땐 내 브라우저에서 직접 가져오면 돼요.</p>
+        <ol>
+          <li>
+            <b>처음 한 번만:</b> 이 버튼을 마우스로 잡고 <b>브라우저 위쪽 즐겨찾기 줄</b>로 끌어다 놓으세요.{' '}
+            <a
+              className="bm-btn"
+              ref={(el) => el?.setAttribute('href', BOOKMARKLET)}
+              onClick={(e) => {
+                e.preventDefault();
+                notify('이 버튼은 누르는 게 아니라, 즐겨찾기 줄로 끌어다 놓는 거예요.', 'err');
+              }}
+              draggable
+            >
+              📌 B.Pick 담기
+            </a>
+            <br />
+            <span className="howto-sub">즐겨찾기 줄이 안 보이면 키보드 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd></span>
+          </li>
+          <li>
+            <button
+              type="button"
+              className="btn small"
+              disabled={!/^https?:\/\//i.test(draft.link.trim())}
+              onClick={() => window.open(draft.link.trim(), '_blank', 'noopener')}
+            >
+              🛒 쇼핑몰에서 열기
+            </button>{' '}
+            를 눌러 상품 페이지를 열어요.
+          </li>
+          <li>
+            상품 페이지에서 즐겨찾기 줄의 <b>📌 B.Pick 담기</b>를 눌러요. "담았어요" 창이 뜨면 확인.
+          </li>
+          <li>
+            이 화면으로 돌아와 <kbd>Ctrl</kbd>+<kbd>V</kbd> → 이름과 사진이 들어가요.
+          </li>
+        </ol>
+        <p className="howto-sub">
+          사진만 안 들어오면: 쇼핑몰 사진에서 <b>마우스 오른쪽 클릭 → 이미지 복사</b> → 여기서 <kbd>Ctrl</kbd>+<kbd>V</kbd>
+        </p>
+      </details>
 
       {/* 2. 사진 */}
       <div className="field">

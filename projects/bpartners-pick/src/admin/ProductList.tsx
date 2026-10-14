@@ -101,6 +101,8 @@ export function ProductList({ products, categories, onEdit, onNew, onReorder, on
 
       <p className="pl-tip">
         총 {products.length}개 · 왼쪽 <b>☰</b>를 잡고 끌면 순서가 바뀌어요 (위에 있을수록 먼저 보여요)
+        <br />
+        📌 쇼핑몰 페이지에서 <b>B.Pick 담기</b>를 누른 뒤 여기서 <kbd>Ctrl</kbd>+<kbd>V</kbd> 하면 새 상품이 바로 만들어져요
       </p>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>

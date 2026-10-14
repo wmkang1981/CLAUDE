@@ -171,3 +171,16 @@ textarea { height: auto; padding: 10px 12px; resize: vertical; line-height: 1.5;
 }
 .cat-chip.on { opacity: 1; outline: 3px solid var(--a-text); outline-offset: 1px; }
 .pl-cat { padding: 0 6px; border-radius: 4px; font-weight: 700; }
+
+/* 📌 담기 버튼 안내 */
+.howto { margin: -6px 0 16px; padding: 10px 14px; border-radius: 12px; background: #f8fafc; border: 1px solid var(--a-line); font-size: 14px; }
+.howto[open] { background: #eff6ff; border-color: #bfdbfe; }
+.howto summary { cursor: pointer; font-weight: 700; color: var(--a-accent); }
+.howto ol { margin: 10px 0 6px; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; }
+.howto-why { margin: 8px 0 0; color: var(--a-muted); font-size: 13px; }
+.howto-sub { font-size: 13px; color: var(--a-muted); }
+.bm-btn {
+  display: inline-block; margin: 4px 0; padding: 6px 14px; border-radius: 999px;
+  background: #111827; color: #fff; font-weight: 700; text-decoration: none; cursor: grab;
+}
+kbd { display: inline-block; padding: 0 6px; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 5px; background: #fff; font: 12px/1.6 system-ui, sans-serif; }
